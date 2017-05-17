@@ -134,15 +134,15 @@ return_AIC_BO <- function(a, b) {
    return(out)
 }
 
-pars   <- c(0.1, 0.1, 0.5, 4, 5.0)
 dat    <- simulate_y(pars)
+pars   <- c(0.1, 0.1, 0.5, 4, 5.0)
 res_BO <- BayesianOptimization(return_AIC_BO, bounds = list(a = c(0, 1), b = c(0, 1)),
                                init_points = 20, n_iter = 1, acq = "ucb",
                                kappa = 2.576, eps = 0, verbose = TRUE)
 
 init_par <- array(c(0.5, 0.5))
-optim(par = optim(par = init_par, fn = return_AIC)$par, 
-      fn = return_AIC)$par
+res_Opt  <- optim(par = optim(par = init_par, fn = return_AIC)$par, 
+                  fn = return_AIC)$par
 
 
 pars   <- c(0.8, 0.8, 0.5, 4, 5.0)

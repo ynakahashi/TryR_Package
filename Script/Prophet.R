@@ -70,5 +70,3 @@ plot(zoo::as.zoo(as.ts(
    plot.type = "single", col=1:3)
 
 
-
-

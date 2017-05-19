@@ -13,7 +13,7 @@
 work_dir <- "/Users/nakahashi/Desktop/GitTest/TryR_Package/Script"
 setwd(work_dir)
 
-## install & load bnlearn
+## install & load rBayesianOptimization
 install.packages("rBayesianOptimization")
 library(rBayesianOptimization)
 

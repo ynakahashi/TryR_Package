@@ -54,8 +54,10 @@ add_markers(p, symbol = ~ Species)
 add_paths(p, linetype = ~ Species)
 
 ## export
-p <- plot_ly(iris, x = ~ Sepal.Width, y = ~ Sepal.Length) %>%
-   add_markers(color = ~ Petal.Length, size = ~ Petal.Length)
+p <- economics %>% 
+   plot_ly(x = ~ date, y = ~ unemploy/pop) %>% 
+   add_lines()
+
 
 # install.packages("htmlwidgets")
 library(htmlwidgets)

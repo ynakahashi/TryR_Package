@@ -10,7 +10,7 @@
 ## Environmental Settings
 ################################################################################
 ## set working directory
-work_dir <- "/Users/nakahashi/Desktop/GitTest/TryR_Package/Script"
+work_dir <- "/Users/nakahashi/Desktop/GitTest/TryR_Package/Output"
 setwd(work_dir)
 
 ## install & load plotly
@@ -54,6 +54,10 @@ add_markers(p, symbol = ~ Species)
 add_paths(p, linetype = ~ Species)
 
 ## export
-install.packages("htmlwidgets")
-htmlwidgets::saveWidget(p, "index.html")
+p <- plot_ly(iris, x = ~ Sepal.Width, y = ~ Sepal.Length) %>%
+   add_markers(color = ~ Petal.Length, size = ~ Petal.Length)
+
+# install.packages("htmlwidgets")
+library(htmlwidgets)
+saveWidget(p, "sample.html")
 

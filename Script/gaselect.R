@@ -38,11 +38,11 @@ x <- as.data.frame(x)
 ## 
 ga_ctrl <- gafsControl(functions = rfGA,
                        method = "repeatedcv",
-                       repeats = 5)
+                       repeats = 1)
 
 set.seed(10)
 rf_ga <- gafs(x = x, y = y,
-              iters = 200,
+              iters = 2,
               gafsControl = ga_ctrl)
 rf_ga
 

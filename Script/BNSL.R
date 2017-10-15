@@ -1,6 +1,7 @@
 install.packages("BNSL")
 library(BNSL)
 library(bnlearn)
+library(mlbench)
 
 res <- bnsl(asia)
 
@@ -16,3 +17,25 @@ tmp <- data.frame(
 
 res <- bnsl(tmp)
 plot(res)
+
+
+
+
+set.seed(1)
+n     <- 100
+p     <- 40
+sigma <- 1
+
+sim <- mlbench.friedman1(n, sd = sigma)
+colnames(sim$x) <- c(paste("real", 1:5, sep = ""),
+                     paste("bogus", 1:5, sep = ""))
+# bogus <- matrix(rnorm(n * p), nrow = n)
+# colnames(bogus) <- paste("bogus", 5 + (1:ncol(bogus)), sep = "")
+# x <- cbind(sim$x, bogus)
+dat <- data.frame(
+   cbind(y = sim$y, sim$x))
+
+res <- bnsl(dat)
+plot(res)
+
+

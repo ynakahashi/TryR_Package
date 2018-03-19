@@ -1,0 +1,20 @@
+---
+title: "Try ggfortify"
+authour: Y.Nakahashi
+date: 2018-03-19
+output: html_notebook
+---
+### 目的
+先日、Twitter上のタイムラインに*ggfortify*というRのライブラリの情報が流れてきました。ggfortifyとは諸々の結果を自動的に良きようにプロットしてくれる便利なライブラリで、githubのREADMEにか以下のような記述があります：
+
+>This package offers fortify and autoplot functions to allow automatic ggplot2 to visualize statistical result of popular R packages. Check out our R Journal paper for more details on the architecture. There's also autoplotly package that could automatically generate interactive visualizations with plotly.js style.
+
+その中の使用例としてRのlmの誤差診断を表示するというものがあります。以下がその例となります。
+
+```{r}
+install.packages("ggfortify")
+library(ggfortify)
+autoplot(lm(Petal.Width ~ Petal.Length, data = iris), label.size = 3)
+```
+
+

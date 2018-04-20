@@ -1,0 +1,239 @@
+---
+title: "Stanを使った変数選択"
+author: Y.Nakahashi
+date: 2018-04-20
+output: html_notebook
+---
+
+### 背景
+Stanを使ってモデリングをしている時に不満を感じる点として、変数選択が難しいということが挙げられます。もともと私自身は、例えばStepwiseやLassoなどを用いた"機械的な"変数選択があまり好きではない[^1]のですが、それでも分析を効率的に進める上でそれらの手法に頼りたくなることがあります。
+
+そういったときに*glm*を用いているのであれば*step*関数により容易に変数選択が可能なのですが、Stanではそうもいきません。何か良い方法はないかと探していたところ、[StanのGithubレポジトリ](https://github.com/stan-dev)に`{projpred}`というそれっぽいlibraryを見つけたので、紹介がてら変数の選択精度を実験してみます[^2]。
+
+[^1]:探索的な分析の時はともかく、変数の機械的な取捨選択は「モデリングじゃない！」という気分になってしまいます
+
+[^2]:他にも良い手法はあると思います。例えば松浦さんのアヒル本では、回帰係数の事前分布を二重指数分布とすることで不要な説明変数を削る"Bayesian Lasso"という手法が紹介されています
+
+### データ準備
+#### ライブラリの読み込み
+今回の分析では`{rstan}`の代わりに`{rstanarm}`というlibraryを使用します。`{rstanarm}`はRの*glm*と同じようなシンタックスのままでモデルをベイズ化することが可能で、例えば`{rstanarm}`のvignetteでは以下のようなスニペットが紹介されています(一部改変あり)[^3]。 
+
+```{r}
+library(rstanarm)
+data("womensrole", package = "HSAUR3")
+womensrole$total <- womensrole$agree + womensrole$disagree
+
+womensrole_bglm_1 <- stan_glm(cbind(agree, disagree) ~ education + gender,
+                              data = womensrole,
+                              family = binomial(link = "logit"), 
+                              prior = student_t(df = 7), 
+                              prior_intercept = student_t(df = 7),
+                              chains = 4, cores = 1, seed = 123)
+womensrole_bglm_1
+```
+
+数字の意味は一旦置いておきますが、今回はこちらのlibraryを使用しながら進めていきます。
+続いて他のlibraryを読み込みます。この辺りはvignetteそのままです。
+
+[^3]:Gelmanのarm::bayesglmとの関係はよくわかりません。一応、dependencyではないようですが。
+
+```{r}
+library(projpred)
+library(ggplot2)
+library(bayesplot)
+theme_set(theme_bw())
+options(mc.cores = parallel::detectCores())
+```
+
+#### シミュレーションデータの作成
+実験を進めるにあたりシミュレーションデータを作成します。もちろんlibraryに付属のデータセットを使っても良いのですが、そのまま同じことをするのも面白くないので以下のように複数のデータを作成して結果を比較してみましょう：
+
+ 1. 説明変数の数が少なく(20)、連続変数のみ
+ 1. 説明変数の数が多く(100)、連続変数のみ
+ 1. 説明変数の数が少なく(20)、ダミー変数を含む
+ 1. 説明変数の数が多く(100)、ダミー変数を含む
+
+見てわかる通りで、説明変数の数とダミー変数の有無によって4パターンを用意します。なぜこのパターンにしたかというと、単純にvignetteを見ていて連続変数ばかりだなと思ったのと、サンプルデータの説明変数の数が20ぐらいで、これなら機械的な選択に頼らなくても自力でどうにかできそうだな、と思ったためです。
+
+各パターンについて特にひねりもなくデータを作成します。なお真のモデルは1と2、3と4で同一のものとしました。したがって2と4の状況は、1と3それぞれに比べて「不要なデータのみが追加された状態」での変数選択という状況になります。
+
+以下のように各パラメータを設定します。
+
+```{r}
+set.seed(123)
+N    <- 100 # number of observations
+xn_1 <- 20  # number of variables for pattern 1
+xn_2 <- 100 # number of variables for pattern 2
+
+b1 <- 0.5 # regression coefficient of X[, 1]
+b2 <- 0.8 # regression coefficient of X[, 2]
+
+var_e <- 1 # residual variance
+```
+
+パターン1 & 2について、まず乱数によりXを生成し、そのうちの2列を使ってYを作成します。またその2列を含む20列および全列を各パターンの説明変数とします。
+
+```{r}
+X <- matrix(rnorm(N * xn_2, 0, 1), nrow = N, ncol = xn_2)
+Y <- 1.0 + X[, 1] * b1 + X[, 2] * b2 + rnorm(N, 0, var_e)
+
+X1 <- X[, 1:xn_1]
+X2 <- X[, 1:xn_2]
+
+dat1 <- data.frame("Y" = Y, "X" = I(X1))
+dat2 <- data.frame("Y" = Y, "X" = I(X2))
+```
+
+データセットを作成する際にX1を*I*で囲って渡すことでX1全体を"X"として再定義できます。すると以下のようなformulaが実行可能になります。
+
+```{r}
+lm(Y ~ X, dat1)
+```
+
+もちろんそのまま渡して`.`で指定するのでも構いません。
+
+```{r}
+tmp <- data.frame("Y" = Y, "X" = X1)
+lm(Y ~ ., tmp)
+```
+
+続いてパターン3 & 4についても基本的に同じ流れでデータを作成しますが、一部にダミー変数を含めます。
+
+```{r}
+Z <- matrix(rnorm(N * xn_2, 0, 1), nrow = N, ncol = xn_2)
+Z[, seq(1, 100, 10)] <- if_else(Z[, seq(1, 100, 10)] > 0, 1, 0)
+Y <- 1.0 + Z[, 1] * b1 + Z[, 2] * b2 + rnorm(N, 0, var_e)
+
+X3 <- Z[, 1:xn_1]
+X4 <- Z[, 1:xn_2]
+
+dat3 <- data.frame("Y" = Y, "X" = I(X3))
+dat4 <- data.frame("Y" = Y, "X" = I(X4))
+```
+
+
+### フィッティング
+#### stan_glmによるフィッティング
+では、これらのデータを用いてフィッティングをしてみましょう。スクリプトは以下のようになります：
+
+```{r}
+n <- N
+D <- xn_1
+p0 <- 5 # prior guess for the number of relevant variables
+
+# scale for tau (notice that stan_glm will automatically scale this by sigma)
+tau0 <- p0 / (D-p0) * 1/sqrt(n) 
+prior_coeff <- hs(global_scale = tau0, slab_scale = 1) # regularized horseshoe prior
+fit1 <- stan_glm(Y ~ X, family = gaussian(), data = dat1, prior = prior_coeff,
+                seed = 777, chains = 4, iter = 2000) 
+```
+
+```{r}
+D <- xn_2
+p0 <- 5
+tau0 <- p0 / (D-p0) * 1/sqrt(n) 
+prior_coeff <- hs(global_scale = tau0, slab_scale = 1)
+fit2 <- stan_glm(Y ~ X, family = gaussian(), data = dat2, prior = prior_coeff,
+                seed = 777, chains = 4, iter = 2000) 
+```
+
+```{r}
+D <- xn_1
+p0 <- 5
+tau0 <- p0 / (D-p0) * 1/sqrt(n) 
+prior_coeff <- hs(global_scale = tau0, slab_scale = 1)
+fit3 <- stan_glm(Y ~ X, family = gaussian(), data = dat3, prior = prior_coeff,
+                seed = 777, chains = 4, iter = 2000) 
+```
+
+```{r}
+D <- xn_2
+p0 <- 5
+tau0 <- p0 / (D-p0) * 1/sqrt(n) 
+prior_coeff <- hs(global_scale = tau0, slab_scale = 1)
+fit4 <- stan_glm(Y ~ X, family = gaussian(), data = dat4, prior = prior_coeff,
+                seed = 777, chains = 4, iter = 2000) 
+```
+
+### 結果の確認
+無事にフィッティングが終わったので、`{projpred}`による変数選択に取り掛かりましょう。スクリプトは以下のようになります：
+
+```{r}
+sel1 <- varsel(fit1, method = 'forward')
+sel1$varsel$vind # variables ordered as they enter during the search
+```
+
+おおっ！ちゃんと1列目と2列目が選ばれていますね！下記のプロットを見ても、3番目以降の変数はモデルの精度に対して寄与していないことがわかると思います。なおここで`elpd`は*expected log predictive density*を指しますが、ちょっと情報量規準辺りの話はうかつに解説できないのでvignetteを引用するに留めておきます。
+
+>The loo method for stanreg objects provides an interface to the loo package for approximate leaveone-out
+cross-validation (LOO). The LOO Information Criterion (LOOIC) has the same purpose as
+the Akaike Information Criterion (AIC) that is used by frequentists. Both are intended to estimate
+the expected log predictive density (ELPD) for a new dataset.
+
+
+```{r}
+# plot predictive performance on training data 
+varsel_plot(sel1, stats=c('elpd', 'rmse'))
+```
+
+
+各パラメータの分布についても見てみましょう。上位5個に選ばれた説明変数に限定してプロットしてみます。
+
+```{r}
+# Visualise the three most relevant variables in the full model
+mcmc_areas(as.matrix(sel1), 
+           pars = names(sel1$varsel$vind[1:5])) + 
+   coord_cartesian(xlim = c(-2, 2))
+```
+
+効果のなかった変数は0を中心に集中して分布していることがわかります。
+
+残りの各パターンについても同様に見ていきますが、個別に確認するのは面倒なので一度にまとめてしまします。
+
+```{r}
+sel2 <- varsel(fit2, method = 'forward')
+sel3 <- varsel(fit3, method = 'forward')
+sel4 <- varsel(fit4, method = 'forward')
+
+sel2$varsel$vind
+sel3$varsel$vind
+sel4$varsel$vind
+```
+
+おぉ〜、いずれもちゃんと1列目と2列目が選ばれていますね。ちょっと簡単すぎましたかね。ただしプロットを見ると、パターン3については少し怪しいようです。
+
+```{r}
+varsel_plot(sel2, stats=c('elpd', 'rmse'))
+varsel_plot(sel3, stats=c('elpd', 'rmse'))
+varsel_plot(sel4, stats=c('elpd', 'rmse'))
+```
+
+またパラメータの分布を見ても、パターン1と比較するといずれも分布の裾が広くなっています。
+さらにパターン3と4では、ダミー変数に対する回帰係数の事後分布で0近辺に山が出来てしまっていますね。ダミー変数は推定が難しいようです。
+
+```{r}
+mcmc_areas(as.matrix(sel2), 
+           pars = names(sel1$varsel$vind[1:5])) + 
+   coord_cartesian(xlim = c(-2, 2))
+mcmc_areas(as.matrix(sel3), 
+           pars = names(sel1$varsel$vind[1:5])) + 
+   coord_cartesian(xlim = c(-2, 2))
+mcmc_areas(as.matrix(sel4), 
+           pars = names(sel1$varsel$vind[1:5])) + 
+   coord_cartesian(xlim = c(-2, 2))
+
+```
+
+### 終わりに
+実験の結果をまとめると以下のようになりそうです：
+
+ - 説明変数の数を20から100に増やしても大きな問題なく変数を選択できそう
+ - ダミー変数を含む場合でも変数選択はできそう
+ - ダミー変数を含むデータの場合、事後分布の幅が広がりやすく、0近辺に山ができやすい
+
+特に最後の結果はパラメータがちゃんと推定できているのか不安になりますし、。。。。。
+
+
+
+
+

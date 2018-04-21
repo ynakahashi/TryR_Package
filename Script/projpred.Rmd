@@ -60,7 +60,7 @@ options(mc.cores = parallel::detectCores())
 以下のように各パラメータを設定します。
 
 ```{r}
-set.seed(123)
+set.seed(1)
 N    <- 100 # number of observations
 xn_1 <- 20  # number of variables for pattern 1
 xn_2 <- 100 # number of variables for pattern 2
@@ -131,7 +131,7 @@ fit1 <- stan_glm(Y ~ X, family = gaussian(), data = dat1, prior = prior_coeff,
 ```{r}
 D <- xn_2
 p0 <- 5
-tau0 <- p0 / (D-p0) * 1/sqrt(n) 
+tau0 <- p0/(D-p0) * 1/sqrt(n) 
 prior_coeff <- hs(global_scale = tau0, slab_scale = 1)
 fit2 <- stan_glm(Y ~ X, family = gaussian(), data = dat2, prior = prior_coeff,
                 seed = 777, chains = 4, iter = 2000) 
@@ -156,14 +156,22 @@ fit4 <- stan_glm(Y ~ X, family = gaussian(), data = dat4, prior = prior_coeff,
 ```
 
 ### 結果の確認
-無事にフィッティングが終わったので、`{projpred}`による変数選択に取り掛かりましょう。スクリプトは以下のようになります：
+無事にフィッティングが終わったのでまずは結果を確認しましょう。`fit1`オブジェクトには多くの情報が格納されていますが、以下のようにパラメータの分布を確認します。
+
+```{r}
+fit1$stan_summary
+```
+
+この結果を見るとX1とX2で設定通りの値が得られているようですね。
+
+ではここから`{projpred}`による変数選択に取り掛かりましょう。スクリプトは以下のようになります：
 
 ```{r}
 sel1 <- varsel(fit1, method = 'forward')
 sel1$varsel$vind # variables ordered as they enter during the search
 ```
 
-おおっ！ちゃんと1列目と2列目が選ばれていますね！下記のプロットを見ても、3番目以降の変数はモデルの精度に対して寄与していないことがわかると思います。なおここで`elpd`は*expected log predictive density*を指しますが、ちょっと情報量規準辺りの話はうかつに解説できないのでvignetteを引用するに留めておきます。
+おおっ！ちゃんと1列目と2列目が選ばれていますね！下記のプロットを見ても、3番目以降の変数はモデルの精度に対して寄与していないことがわかると思います[^4]。なおここで`elpd`は*expected log predictive density*を指しますが、ちょっと情報量規準辺りの話はうかつに解説できないのでvignetteを引用するに留めておきます。
 
 >The loo method for stanreg objects provides an interface to the loo package for approximate leaveone-out
 cross-validation (LOO). The LOO Information Criterion (LOOIC) has the same purpose as
@@ -173,7 +181,9 @@ the expected log predictive density (ELPD) for a new dataset.
 
 ```{r}
 # plot predictive performance on training data 
+# png("../Image/projpred_sel1_varsel.png")
 varsel_plot(sel1, stats=c('elpd', 'rmse'))
+# dev.off()
 ```
 
 
@@ -181,9 +191,11 @@ varsel_plot(sel1, stats=c('elpd', 'rmse'))
 
 ```{r}
 # Visualise the three most relevant variables in the full model
+png("../Image/projpred_sel1_mcmcarea.png")
 mcmc_areas(as.matrix(sel1), 
            pars = names(sel1$varsel$vind[1:5])) + 
    coord_cartesian(xlim = c(-2, 2))
+dev.off()
 ```
 
 効果のなかった変数は0を中心に集中して分布していることがわかります。
@@ -200,40 +212,90 @@ sel3$varsel$vind
 sel4$varsel$vind
 ```
 
-おぉ〜、いずれもちゃんと1列目と2列目が選ばれていますね。ちょっと簡単すぎましたかね。ただしプロットを見ると、パターン3については少し怪しいようです。
+むむ。。。
+
+いずれのパターンでも2列目はちゃんと選ばれていますが、パターン3と4では1列目が選ばれていませんね。
+プロットも見てみましょう。
 
 ```{r}
+# png("../Image/projpred_sel2_varsel.png")
 varsel_plot(sel2, stats=c('elpd', 'rmse'))
+# dev.off()
+# png("../Image/projpred_sel3_varsel.png")
 varsel_plot(sel3, stats=c('elpd', 'rmse'))
+# dev.off()
+# png("../Image/projpred_sel4_varsel.png")
 varsel_plot(sel4, stats=c('elpd', 'rmse'))
+# dev.off()
 ```
 
-またパラメータの分布を見ても、パターン1と比較するといずれも分布の裾が広くなっています。
-さらにパターン3と4では、ダミー変数に対する回帰係数の事後分布で0近辺に山が出来てしまっていますね。ダミー変数は推定が難しいようです。
+まぁ選ばれていないので当然ですが、2変数目ですでにフルモデルにおけるelpdやrmseと接するようになっており、モデルの精度改善に貢献しているのは1変数目だけという結果になっています。
+
+パラメータの分布を見ても、パターン1と比較するといずれも分布の裾が広くなっています。さらにパターン3では正の効果を受けたためか右に裾を引く形とはなっているものの、効果のない他の変数とほとんど変わらない分布となってしまいました。ダミー変数は推定が難しいようです。
 
 ```{r}
+# png("../Image/projpred_sel2_mcmcarea.png")
 mcmc_areas(as.matrix(sel2), 
-           pars = names(sel1$varsel$vind[1:5])) + 
+           pars = names(sel2$varsel$vind[1:5])) + 
    coord_cartesian(xlim = c(-2, 2))
+# dev.off()
+# png("../Image/projpred_sel3_mcmcarea.png")
 mcmc_areas(as.matrix(sel3), 
-           pars = names(sel1$varsel$vind[1:5])) + 
+           pars = names(sel3$varsel$vind[1:5])) + 
    coord_cartesian(xlim = c(-2, 2))
+# dev.off()
+# png("../Image/projpred_sel4_mcmcarea.png")
 mcmc_areas(as.matrix(sel4), 
-           pars = names(sel1$varsel$vind[1:5])) + 
+           pars = names(sel4$varsel$vind[1:5])) + 
    coord_cartesian(xlim = c(-2, 2))
-
+# dev.off()
 ```
+
+#### 追試
+では、ダミー変数が含まれる場合に真のパラメータを捉えることができる確率としてはどの程度になるのでしょうか。パターン3を100回繰り返し、そのうち何回真の変数セットを選択できるか確認してみましょう。
+
+
+```{r, echo = FALSE}
+n  <- 100
+t  <- 100
+D  <- 20
+p0 <- 5
+b1 <- 0.5
+b2 <- 0.8
+tau0 <- p0 / (D-p0) * 1/sqrt(n) 
+
+out <- matrix(0, t, 2)
+for (i in 1:t) {
+   x <- matrix(rnorm(n * D, 0, 1), nrow = n)
+   x[, seq(1, D, 5)] <- ifelse(x[, seq(1, D, 5)] > 0, 1, 0)
+   y <- 1.5 + x[, 1] * b1 + x[, 2] * b2 + rnorm(n, 0, 1)
+   dat <- data.frame("y" = y, "x" = I(x))
+   
+   prior_coeff <- hs(global_scale = tau0, slab_scale = 1)
+   fit0 <- stan_glm(y ~ x, family = gaussian(), data = dat, prior = prior_coeff,
+                    chains = 4, iter = 2000)
+   sel0 <- varsel(fit0)
+   out[i, ] <-  names(sel0$varsel$vind[1:2])
+}
+out
+```
+
+```{r}
+table(out[, 1])
+table(out[, 2])
+```
+
+
+上記の通り、連続変数である2列目の選択確率は100%である一方、ダミー変数である1列目は約半数しか選択されないという結果になりました。もちろん回帰係数の大小にも影響されるのでしょうが、結構衝撃的な結果に思えます。
+
 
 ### 終わりに
-実験の結果をまとめると以下のようになりそうです：
+これまでの実験の結果をまとめると以下のようになりそうです：
 
- - 説明変数の数を20から100に増やしても大きな問題なく変数を選択できそう
- - ダミー変数を含む場合でも変数選択はできそう
- - ダミー変数を含むデータの場合、事後分布の幅が広がりやすく、0近辺に山ができやすい
+ - 連続変数であれば説明変数を20から100に増やしても大きな問題なく変数を選択できそう
+ - ダミー変数の変数選択は難しく、今回の条件の場合、半分の確率で失敗する
+ - ダミー変数はパラメータの推定も難しい
 
-特に最後の結果はパラメータがちゃんと推定できているのか不安になりますし、。。。。。
+実際のデータ分析の現場では真のパラメータを予め知ることができないため、変数選択の結果を受け入れざるを得ないことがあるかと思います。しかし今回の実験の結果からは「真の変数セットを選択できる確率は半分程度しかない」ことが示されており、機械的な変数の取捨選択がどれほど危険であるかを教えてくれているのではないでしょうか。
 
-
-
-
-
+とは言え今回実験に使用した`{projpred}`は便利なlibraryであると思いますので、これから活用しつつも引き続き変数選択の方法について探していこうと思います。

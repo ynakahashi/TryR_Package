@@ -17,44 +17,35 @@ library(GPfit)
 
 ```{r}
 ## 1D Example 1
-n = 5
-d = 1
+n <- 7
+d <- 1
 computer_simulator <- function(x) {
-   x = 2*x + 0.5;
-   y = sin(10*pi*x) / (2*x) + (x-1)^4;
+   # x <- 2*x + 0.5;
+   y <- sin(10*pi*x) / (2*x) + (x-1)^4;
    return(y)
 }
 
 set.seed(3)
 library(lhs)
 
-x = maximinLHS(n, d)
-y = computer_simulator(x)
+# x <- maximinLHS(n, d)
+x <- runif(n)
+y <- computer_simulator(x)
 GPmodel <- GP_fit(x, y)
+corr_matrix(x, GPmodel$beta)
+
 print(GPmodel)
 predict(GPmodel, x)
-x
-y
 plot(GPmodel)
 
-x
-x %*% (-1 * t(x))
-r <- 
-var(x) * exp(- r /sig)
 
 
-v <- matrix(rep(x, length(x)), ncol = length(x)) - 
-   matrix(rep(x, each = length(x)), ncol = length(x))
+v <- matrix(rep(x, times = length(x)), ncol = length(x)) - 
+     matrix(rep(x, each = length(x)), ncol = length(x))
+r <- sqrt(v * v)
+sig <- sqrt(GPmodel$sig2)
+k <- as.numeric(var(x)) * exp(-r/sig)
 
-sqrt(t(v) %*% v)
-
-
-
-
-
-v <- matrix(c(1, 2, 3))
-
-v %*% -t(v)
 ```
 
 ```{r}
@@ -76,6 +67,7 @@ y
 plot(GPmodel)
 ```
 
+
 ```{r}
 ## 2D Example: GoldPrice Function
 computer_simulator <- function(x) {
@@ -95,5 +87,5 @@ y = computer_simulator(x);
 GPmodel = GP_fit(x,y);
 print(GPmodel)
 plot(GPmodel)
-
+predict(GPmodel)
 ```

@@ -1,0 +1,62 @@
+---
+title: "MLFLOW"
+author: "ynakahashi"
+date: "2018/12/28"
+output: html_document
+---
+
+### Install & load package
+```{r}
+# install.packages("mlflow")
+library(mlflow)
+```
+
+### Run the sample script
+[here](https://databricks.com/blog/2018/10/03/mlflow-v0-7-0-features-new-r-api-by-rstudio.html)
+
+```{r}
+# Define parameters
+my_int <- mlflow_param("my_int", 1, "integer")
+my_num <- mlflow_param("my_num", 1.0, "numeric")
+my_str <- mlflow_param("my_str", "a", "string")
+```
+
+```{r}
+# Log parameters
+mlflow_log_param("param_int", my_int)
+mlflow_log_param("param_num", my_num)
+mlflow_log_param("param_str", my_str)
+```
+
+
+```{r}
+# Read parameters
+column <- mlflow_log_param("column", 1)
+```
+
+```{r}
+# Log total rows
+mlflow_log_metric("rows", nrow(iris))
+```
+
+```{r}
+# Train model
+model <- lm(Sepal.Width ~ iris[[column]], iris)
+```
+
+```{r}
+# Log models intercept
+mlflow_log_metric("intercept", model$coefficients[["(Intercept)"]])
+```
+
+```{r}
+# Create and activate the “R-Test” experiment
+mlflow_create_experiment("R-Test")
+Then using R APIs, you can fetch information about the active run.
+
+mlflow_active_run()
+or using MLflows user interface by running:
+
+mlflow_ui()
+```
+

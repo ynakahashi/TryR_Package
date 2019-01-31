@@ -1,0 +1,48 @@
+---
+title: "dglm"
+author: "ynakahashi"
+date: "2019/1/31"
+output: html_document
+---
+
+### sample data
+```{r}
+d <- data.frame(
+   y = c(4:8),
+   cnt = c(1, 947, 71, 13, 1))
+d2 <- data.frame(
+   y = rep(d$y, d$cnt))
+```
+
+```{r}
+mean(d2$y)
+var(d2$y)
+```
+
+
+
+### glm
+```{r}
+res1 <- glm(y ~ 1, d2, family = poisson("log"))
+exp(res1$coefficients[1])
+mean(d2$y)
+var(d2$y)
+```
+
+### dglm
+```{r}
+# library(dglm)
+res2 <- dglm(y ~ 1, ~1, data = d2, family = poisson("log"))
+exp(res2$coefficients[1])
+mean(d2$y)
+```
+
+```{r}
+exp(res2$dispersion.fit$coefficients)
+var(d2$y)
+```
+
+
+
+
+
